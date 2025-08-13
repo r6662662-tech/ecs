@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Solar Position Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+        label { display: block; margin-top: 10px; }
+        button { margin-top: 15px; padding: 8px 12px; cursor: pointer; }
+        h2 { color: #333; }
+        #result { background: #f9f9f9; padding: 10px; margin-top: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h2>Solar Position Calculator</h2>
+
+    <label>Latitude: <input id="lat" type="number" step="0.0001"></label>
+    <label>Longitude: <input id="lon" type="number" step="0.0001"></label>
+    <button onclick="getLocation()">📍 Use My Current Location</button>
+    
+    <label>Date: <input id="date" type="date"></label>
+    <label>Local Time: <input id="time" type="time" step="60"></label>
+    <button onclick="calculate()">Calculate</button>
+
+    <h3>Results:</h3>
+    <div id="result"></div>
+
+<script>
+function getLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                document.getElementById('lat').value = position.coords.latitude.toFixed(6);
+                document.getElementById('lon').value = position.coords.longitude.toFixed(6);
+            },
+            error => {
+                alert("Unable to retrieve location. Please check browser permissions.");
+            }
+        );
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+}
+
+function calculate() {
+    const latDeg = parseFloat(document.getElementById('lat').value);
+    const lon = parseFloat(document.getElementById('lon').value);
+    const date = new Date(document.getElementById('date').value + 'T' + document.getElementById('time').value);
+
+    const lat = latDeg * Math.PI/180;
+
+    // Day of year
+    const start = new Date(date.getFullYear(), 0, 0);
+    const diff = date - start + ((start.getTimezoneOffset() - date.getTimezoneOffset()) * 60000);
+    const day = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    // Declination δ (radians)
+    const decl = 23.45 * Math.PI/180 * Math.sin(2 * Math.PI * (284 + day) / 365);
+    const declDeg = decl * 180 / Math.PI;
+
+    // Equation of Time ET (minutes)
+    const B = 2 * Math.PI * (day - 81) / 364;
+    const ET = 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+
+    // LSTM (Local Standard Time Meridian)
+    const timezoneOffset = -date.getTimezoneOffset() / 60;
+    const LSTM = 15 * timezoneOffset;
+
+    // Local Solar Time (minutes)
+    const localTimeMinutes = date.getHours()*60 + date.getMinutes();
+    const LSTminutes = localTimeMinutes + 4*(lon - LSTM) + ET;
+
+    // Convert LST to HH:MM
+    let LSThours = Math.floor(LSTminutes / 60);
+    let LSTmins = Math.floor(LSTminutes % 60);
+    if (LSThours < 0) LSThours += 24; // wrap around if needed
+    const LSTformatted = `${String(LSThours).padStart(2,'0')}:${String(LSTmins).padStart(2,'0')}`;
+
+    // Hour angle H (degrees & radians)
+    const Hdeg = (LSTminutes / 4 - 180);
+    const H = Hdeg * Math.PI/180;
+
+    // Solar altitude β
+    const beta = Math.asin(Math.cos(lat)*Math.cos(decl)*Math.cos(H) + Math.sin(lat)*Math.sin(decl));
+    const betaDeg = beta * 180 / Math.PI;
+
+    // Zenith angle θz = 90° - β
+    const zenithDeg = 90 - betaDeg;
+
+    // Solar azimuth Φ
+    const phi = Math.asin(Math.cos(decl)*Math.sin(H) / Math.cos(beta));
+    const phiDeg = phi * 180 / Math.PI;
+
+    document.getElementById('result').innerHTML = 
+        `<b>Declination (δ):</b> ${declDeg.toFixed(2)}°<br>` +
+        `<b>Real Solar Time (LST):</b> ${LSTformatted}<br>` +
+        `<b>Hour Angle (H):</b> ${Hdeg.toFixed(2)}°<br>` +
+        `<b>Zenith Angle (θz):</b> ${zenithDeg.toFixed(2)}°<br>` +
+        `<b>Solar Altitude (β):</b> ${betaDeg.toFixed(2)}°<br>` +
+        `<b>Solar Azimuth (Φ):</b> ${phiDeg.toFixed(2)}°`;
+}
+</script>
+</body>
+</html>
